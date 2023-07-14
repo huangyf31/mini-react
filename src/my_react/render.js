@@ -1,12 +1,10 @@
 let nextUnitOfWork = null;
+let wipRoot = null;
 
 function performUnitOfWork(fiber) {
     //reactElement 转换成一个真实DOM
     if (!fiber.dom) {
         fiber.dom = createDom(fiber);
-    }
-    if (fiber.parent) {
-        fiber.parent.dom.appendChild(fiber.dom);
     }
     //为当前的fiber创造它子节点的fiber
     const elements = fiber?.props?.children;
@@ -20,18 +18,18 @@ function performUnitOfWork(fiber) {
         }
         if (index === 0) {
             fiber.child = newFiber;
-        }else {
+        } else {
             prevSibling.sibling = newFiber;
         }
         prevSibling = newFiber;
     })
     //return下一个任务单元
-    if(fiber.child){
+    if (fiber.child) {
         return fiber.child;
     }
     let nextFiber = fiber;
-    while (nextFiber){
-        if(nextFiber.sibling){
+    while (nextFiber) {
+        if (nextFiber.sibling) {
             return nextFiber.sibling
         }
         nextFiber = nextFiber.parent
@@ -45,6 +43,9 @@ function workLoop(deadline) {
     while (nextUnitOfWork && shouldYield) {
         nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
         shouldYield = deadline.timeRemaining() > 1;
+    }
+    if (!nextUnitOfWork && wipRoot) {
+        commitRoot();
     }
     // deadline.timeRemaining();//得到当前帧剩余的时间 scheduler
     //浏览器空闲状态运行这个回调函数
@@ -68,14 +69,29 @@ function createDom(element) {
     return dom;
 }
 
+function commitRoot() {
+    commitWork(wipRoot.child);
+    wipRoot = null;
+};
+
+function commitWork(fiber) {
+    if (!fiber) {
+        return
+    }
+    const domParent = fiber.parent.dom;
+    domParent.appendChild(fiber.dom);
+    commitWork(fiber.child);
+    commitWork(fiber.sibling);
+};
+
 function render(element, container) {
-    nextUnitOfWork = {
+    wipRoot = {
         dom: container,
         props: {
             children: [element],
         }
-    }
-
+    };
+    nextUnitOfWork = wipRoot;
 }
 
 export default render;
